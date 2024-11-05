@@ -13,15 +13,18 @@ FAQs:
     The width and height fields in the Header struct being vec is due to the design choice for storing binary data in a flexible form
 4. What is the time complexity?
     I have not implemented any optimization, so the time complexity is likely O(n^2).
-
+5. Why are some of the colors swapped around such as in part 7?
+    This is a mistake I should have corrected earlier, but I realized midway into the project that the order of storing pixels is (b,g,r) not (r,g,b)
+    I will correct this in the future.
 What has been done:
     1. Read/write files ✅
     2. Image manipulation functions ✅
     3. Performing all required tasks ✅
 
 Future expansions:
-    1. Implement optimization
-    2. Implement more image manipulation functions
+    1. Correct the rgb mistake
+    2. Implement optimization
+    3. Implement more image manipulation functions
 */
 
 
