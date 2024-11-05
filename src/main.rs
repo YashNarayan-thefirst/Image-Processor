@@ -5,6 +5,7 @@ use std::{
 
 #[derive(Clone, Debug)]
 struct Header {
+    //Rust doesn't have classes, so structs need to be used
     id_length: u8,
     color_map_type: u8,
     image_type_code: u8,
@@ -21,9 +22,9 @@ struct Header {
 
 #[derive(Clone, Copy, Debug)]
 struct Pixel {
-    red: u8,
-    green: u8,
-    blue: u8,
+    blue:u8,
+    green:u8,
+    red:u8
 }
 
 #[derive(Clone, Debug)]
@@ -33,6 +34,7 @@ struct RgbImage {
 }
 
 fn read_file_vec(filepath: &str) -> Result<Vec<u8>, std::io::Error> {
+    //I wrote this with reference from: https://doc.rust-lang.org/book/ch12-02-reading-a-file.html
     let mut file = File::open(filepath)?;
     let mut buffer = Vec::new();
     file.read_to_end(&mut buffer)?;
@@ -40,6 +42,7 @@ fn read_file_vec(filepath: &str) -> Result<Vec<u8>, std::io::Error> {
 }
 
 fn create_image(image_bytes: &[u8], output_path: &str) -> Result<(), std::io::Error> {
+    //Same thing, but from: https://doc.rust-lang.org/std/fs/struct.File.html
     if let Some(parent) = std::path::Path::new(output_path).parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -47,6 +50,7 @@ fn create_image(image_bytes: &[u8], output_path: &str) -> Result<(), std::io::Er
 }
 
 fn multiply(a: &RgbImage, b: &RgbImage) -> RgbImage {
+    //Iterates through each px, normailizing then multiply their values. +0.5 to handle rounding truncations.
     RgbImage {
         header: a.header.clone(),
         pixel_data: a
@@ -71,6 +75,7 @@ fn multiply(a: &RgbImage, b: &RgbImage) -> RgbImage {
 }
 
 fn subtract(top: &RgbImage, bottom: &RgbImage) -> RgbImage {
+    //Subtracts each pixel, pretty self explanatory
     RgbImage {
         header: bottom.header.clone(),
         pixel_data: top
@@ -91,6 +96,7 @@ fn subtract(top: &RgbImage, bottom: &RgbImage) -> RgbImage {
 }
 
 fn screen(a: &RgbImage, b: &RgbImage) -> RgbImage {
+    //Uses the provided screen formula
     RgbImage {
         header: a.header.clone(),
         pixel_data: a
@@ -162,6 +168,7 @@ fn overlay_pixels(a: &Pixel, b: &Pixel) -> Pixel {
     }
 }
 fn generate_rgb_image_bytes(rgb_image: RgbImage) -> Vec<u8> {
+    //Generates a Vec of all data, for ease of access
     let mut bytes = vec![
         rgb_image.header.id_length,
         rgb_image.header.color_map_type,
@@ -184,71 +191,50 @@ fn generate_rgb_image_bytes(rgb_image: RgbImage) -> Vec<u8> {
     }
     bytes
 }
-
 fn get_rgb_image_data(input_path: &str) -> RgbImage {
+    //Generates an RgbImage given a path for "officially" accessing files
     let raw = read_file_vec(input_path).expect("Failed to read file");
-    let h = Header {
+
+    let header = Header {
         id_length: raw[0],
         color_map_type: raw[1],
         image_type_code: raw[2],
-        color_map_origin: raw[3..5].to_vec(),
-        color_map_length: raw[5..7].to_vec(),
+        color_map_origin: raw[3..5].try_into().unwrap(),
+        color_map_length: raw[5..7].try_into().unwrap(),
         color_map_depth: raw[7],
-        x_origin: raw[8..10].to_vec(),
-        y_origin: raw[10..12].to_vec(),
-        width: raw[12..14].to_vec(),
-        height: raw[14..16].to_vec(),
+        x_origin: raw[8..10].try_into().unwrap(),
+        y_origin: raw[10..12].try_into().unwrap(),
+        width: raw[12..14].try_into().unwrap(),
+        height: raw[14..16].try_into().unwrap(),
         bits_per_pixel: raw[16],
         image_descriptor: raw[17],
     };
-    let mut pixels = vec![];
-    let mut counter = 2;
-    let mut pixel = Pixel {
-        red: 0,
-        green: 0,
-        blue: 0,
-    };
 
-    for &byte in &raw[18..] {
-        match counter {
-            2 => {
-                pixel.red = byte;
-                counter -= 1;
-            }
-            1 => {
-                pixel.green = byte;
-                counter -= 1;
-            }
-            0 => {
-                pixel.blue = byte;
-                counter = 2;
-                pixels.push(pixel);
-            }
-            _ => {}
-        }
-    }
+    let pixels: Vec<Pixel> = raw[18..]
+        .chunks_exact(3)
+        .map(|chunk| Pixel {
+            red: chunk[0],
+            green: chunk[1],
+            blue: chunk[2],
+        })
+        .collect();
+
     RgbImage {
-        header: h,
+        header,
         pixel_data: pixels,
     }
-}
-fn test_image(output: &[u8], example: &[u8]) -> bool {
-    output == example
 }
 
 fn print_test(rgb_image: RgbImage, s: &str, no: u8) {
     let generated_bytes = generate_rgb_image_bytes(rgb_image);
     let output_path = format!("output/{}.tga", s);
     create_image(&generated_bytes, &output_path).expect("Cannot write file");
-    let test_bytes = read_file_vec(&output_path).unwrap();
-    println!(
-        "Task #{} Test: {}",
-        no,
-        {if test_image(&generated_bytes, &test_bytes){ "✅".to_string() }
-        else{ "❌".to_string() }
-        }
-    );
+    
+    let test_bytes = read_file_vec(&format!("examples/EXAMPLE_{}.tga",s).to_string()).expect("Failed to read output file");
+    
+    println!("Task #{} Test: {}", no, if generated_bytes == test_bytes { "✅" } else { "❌" });
 }
+
 
 fn main() {
     let car = get_rgb_image_data("input/car.tga");
@@ -275,47 +261,17 @@ fn main() {
 
     let mut part6 = car.clone();
     for p in &mut part6.pixel_data {
-        p.red = (p.red as u16 + 200).min(255) as u8;
+        p.green = (p.green as u16 + 200).min(255) as u8;
     }
     print_test(part6, "part6", 6);
 
     let mut part7 = car.clone();
     for p in &mut part7.pixel_data {
-        p.green = 0;
+        p.blue = (p.blue as u16 * 4).min(255) as u8;
+        p.green = p.green as u8;
+        p.red = (p.red * 0) as u8;
     }
     print_test(part7, "part7", 7);
-
-    {
-        let part8_r = RgbImage {
-            header: car.header.clone(),
-            pixel_data: car
-                .pixel_data
-                .iter()
-                .map(|p| Pixel {
-                    red: p.blue,
-                    green: p.blue,
-                    blue: p.blue,
-                })
-                .collect(),
-        };
-        print_test(part8_r, "part8_r", 81);
-    }
-
-    {
-        let part8_g = RgbImage {
-            header: car.header.clone(),
-            pixel_data: car
-                .pixel_data
-                .iter()
-                .map(|p| Pixel {
-                    red: p.green,
-                    green: p.green,
-                    blue: p.green,
-                })
-                .collect(),
-        };
-        print_test(part8_g, "part8_g", 82);
-    }
 
     {
         let part8_b = RgbImage {
@@ -332,21 +288,52 @@ fn main() {
         };
         print_test(part8_b, "part8_b", 83);
     }
+    {
+        let part8_g = RgbImage {
+            header: car.header.clone(),
+            pixel_data: car
+                .pixel_data
+                .iter()
+                .map(|p| Pixel {
+                    red: p.green,
+                    green: p.green,
+                    blue: p.green,
+                })
+                .collect(),
+        };
+        print_test(part8_g, "part8_g", 82);
+    }
+    {
+        let part8_r = RgbImage {
+            header: car.header.clone(),
+            pixel_data: car
+                .pixel_data
+                .iter()
+                .map(|p| Pixel {
+                    red: p.blue,
+                    green: p.blue,
+                    blue: p.blue,
+                })
+                .collect(),
+        };
+        print_test(part8_r, "part8_r", 81);
+    }
 
     let part9 = RgbImage {
-        header: layer_red.header,
-        pixel_data: layer_red
-            .pixel_data
-            .iter()
-            .zip(&layer_green.pixel_data)
-            .zip(&layer_blue.pixel_data)
-            .map(|((r, g), b)| Pixel {
-                red: r.red,
-                green: g.green,
-                blue: b.blue,
-            })
-            .collect(),
+        header: layer_red.header.clone(), 
+        pixel_data: {
+            let mut pixels = Vec::new();
+            for i in 0..layer_red.pixel_data.len() {
+                pixels.push(Pixel {
+                    red: layer_blue.pixel_data[i].red,
+                    green: layer_green.pixel_data[i].green,
+                    blue: layer_red.pixel_data[i].blue,
+                });
+            }
+            pixels 
+        }
     };
+    
     print_test(part9, "part9", 9);
     let part10 = RgbImage {
         header: text2.header.clone(),
@@ -372,15 +359,15 @@ fn main() {
     for y in 0..row_height {
         let start = y * row_width;
         let end = (y + 1) * row_width;
-        combined_pixels.extend_from_slice(&car.pixel_data[start..end]);
-        combined_pixels.extend_from_slice(&circles.pixel_data[start..end]);
+        combined_pixels.extend_from_slice(&text.pixel_data[start..end]);
+        combined_pixels.extend_from_slice(&pattern1.pixel_data[start..end]);
     }
 
     for y in 0..row_height {
         let start = y * row_width;
         let end = (y + 1) * row_width;
-        combined_pixels.extend_from_slice(&pattern1.pixel_data[start..end]);
-        combined_pixels.extend_from_slice(&text.pixel_data[start..end]);
+        combined_pixels.extend_from_slice(&car.pixel_data[start..end]);
+        combined_pixels.extend_from_slice(&circles.pixel_data[start..end]);
     }
 
     let ec = RgbImage {
@@ -388,6 +375,5 @@ fn main() {
         pixel_data: combined_pixels,
     };
 
-    create_image(&generate_rgb_image_bytes(ec), "output/extracredit.tga")
-        .expect("Cannot write file");
+    print_test(ec, "extracredit", 11);
 }
