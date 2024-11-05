@@ -3,6 +3,28 @@ use std::{
     io::{Read, Write},
 };
 
+/*
+FAQs:
+1. How is the formatting so good?
+    I used cargo fmt, which automatically formats my code in a rust-intened fashion. It is needed to look at the abominations I have made.
+2. How is testing done?
+    I use the example files as a reference and compare my generated images using the boolean eq(==) operator. It's that simple.
+3. Why is the width and height a vec?
+    The width and height fields in the Header struct being vec is due to the design choice for storing binary data in a flexible form
+4. What is the time complexity?
+    I have not implemented any optimization, so the time complexity is likely O(n^2).
+
+What has been done:
+    1. Read/write files ✅
+    2. Image manipulation functions ✅
+    3. Performing all required tasks ✅
+
+Future expansions:
+    1. Implement optimization
+    2. Implement more image manipulation functions
+*/
+
+
 #[derive(Clone, Debug)]
 struct Header {
     //Rust doesn't have classes, so structs need to be used
@@ -22,9 +44,9 @@ struct Header {
 
 #[derive(Clone, Copy, Debug)]
 struct Pixel {
-    blue:u8,
-    green:u8,
-    red:u8
+    blue: u8,
+    green: u8,
+    red: u8,
 }
 
 #[derive(Clone, Debug)]
@@ -125,6 +147,7 @@ fn screen(a: &RgbImage, b: &RgbImage) -> RgbImage {
 }
 
 fn overlay(a: &RgbImage, b: &RgbImage) -> RgbImage {
+    //Uses the overlay pixel formula and maps it to the image
     RgbImage {
         header: a.header.clone(),
         pixel_data: a
@@ -136,6 +159,7 @@ fn overlay(a: &RgbImage, b: &RgbImage) -> RgbImage {
     }
 }
 fn overlay_pixels(a: &Pixel, b: &Pixel) -> Pixel {
+    //Uses the overlay formula: b<=0.5: (c=2ab)/ b>0.5 (c=1-2(1-a)(1-b))                                    This was a nightmare to write
     let (ar, ag, ab) = (
         a.red as f64 / 255.0,
         a.green as f64 / 255.0,
@@ -147,19 +171,19 @@ fn overlay_pixels(a: &Pixel, b: &Pixel) -> Pixel {
         b.blue as f64 / 255.0,
     );
     Pixel {
-        red: ((if br < 0.5 {
+        red: ((if br <= 0.5 {
             ar * 2.0 * br
         } else {
             1.0 - 2.0 * (1.0 - ar) * (1.0 - br)
         }) * 255.0
             + 0.5) as u8,
-        green: ((if bg < 0.5 {
+        green: ((if bg <= 0.5 {
             ag * 2.0 * bg
         } else {
             1.0 - 2.0 * (1.0 - ag) * (1.0 - bg)
         }) * 255.0
             + 0.5) as u8,
-        blue: ((if bb < 0.5 {
+        blue: ((if bb <= 0.5 {
             ab * 2.0 * bb
         } else {
             1.0 - 2.0 * (1.0 - ab) * (1.0 - bb)
@@ -168,7 +192,7 @@ fn overlay_pixels(a: &Pixel, b: &Pixel) -> Pixel {
     }
 }
 fn generate_rgb_image_bytes(rgb_image: RgbImage) -> Vec<u8> {
-    //Generates a Vec of all data, for ease of access
+    //Generates a Vec of all data in sequence, for ease of access
     let mut bytes = vec![
         rgb_image.header.id_length,
         rgb_image.header.color_map_type,
@@ -226,17 +250,27 @@ fn get_rgb_image_data(input_path: &str) -> RgbImage {
 }
 
 fn print_test(rgb_image: RgbImage, s: &str, no: u8) {
+    //Compres the generated user image to the example images.                                               I even put the unicode checkmark and cross for no reason
     let generated_bytes = generate_rgb_image_bytes(rgb_image);
     let output_path = format!("output/{}.tga", s);
     create_image(&generated_bytes, &output_path).expect("Cannot write file");
-    
-    let test_bytes = read_file_vec(&format!("examples/EXAMPLE_{}.tga",s).to_string()).expect("Failed to read output file");
-    
-    println!("Task #{} Test: {}", no, if generated_bytes == test_bytes { "✅" } else { "❌" });
+
+    let test_bytes = read_file_vec(&format!("examples/EXAMPLE_{}.tga", s).to_string())
+        .expect("Failed to read output file");
+
+    println!(
+        "Part #{} Test: {}",
+        no,
+        if generated_bytes == test_bytes {
+            "✅"
+        } else {
+            "❌"
+        }
+    );
 }
 
-
 fn main() {
+    //Assign filenames to the appropriate variable so we can access their data. I was planning to use a hashmap, but I was too lazy to write hashmap.unwrap().get(k)
     let car = get_rgb_image_data("input/car.tga");
     let circles = get_rgb_image_data("input/circles.tga");
     let layer_blue = get_rgb_image_data("input/layer_blue.tga");
@@ -249,6 +283,8 @@ fn main() {
     let text = get_rgb_image_data("input/text.tga");
     let text2 = get_rgb_image_data("input/text2.tga");
 
+
+    //Creating and testing images
     print_test(multiply(&layer1, &pattern1), "part1", 1);
     print_test(subtract(&layer2, &car), "part2", 2);
     print_test(screen(&text, &multiply(&layer1, &pattern2)), "part3", 3);
@@ -258,13 +294,14 @@ fn main() {
         4,
     );
     print_test(overlay(&layer1, &pattern1), "part5", 5);
-
+    
+    //Iterates through pxs and constructs new pxs with g+200
     let mut part6 = car.clone();
     for p in &mut part6.pixel_data {
         p.green = (p.green as u16 + 200).min(255) as u8;
     }
     print_test(part6, "part6", 6);
-
+    //Same here, but multiplies red with a max of 255 and removes blue 
     let mut part7 = car.clone();
     for p in &mut part7.pixel_data {
         p.blue = (p.blue as u16 * 4).min(255) as u8;
@@ -273,6 +310,7 @@ fn main() {
     }
     print_test(part7, "part7", 7);
 
+    //Iterates through pxs and constructs new pxs with each color value
     {
         let part8_b = RgbImage {
             header: car.header.clone(),
@@ -318,9 +356,9 @@ fn main() {
         };
         print_test(part8_r, "part8_r", 81);
     }
-
+    //Merges the rgb values of each layer and stores it
     let part9 = RgbImage {
-        header: layer_red.header.clone(), 
+        header: layer_red.header.clone(),
         pixel_data: {
             let mut pixels = Vec::new();
             for i in 0..layer_red.pixel_data.len() {
@@ -330,11 +368,13 @@ fn main() {
                     blue: layer_red.pixel_data[i].blue,
                 });
             }
-            pixels 
-        }
+            pixels
+        },
     };
-    
+
     print_test(part9, "part9", 9);
+
+    //Flips pixels using the reverse method, since they are stored in a vec
     let part10 = RgbImage {
         header: text2.header.clone(),
         pixel_data: {
@@ -346,13 +386,14 @@ fn main() {
 
     print_test(part10, "part10", 10);
 
+    //The extra credit nightmare, please look away from this mess
     let mut header = car.header.clone();
-    let width = u16::from_le_bytes(car.header.width.try_into().unwrap()) * 2;
-    let height = u16::from_le_bytes(car.header.height.try_into().unwrap()) * 2;
+    let width = u16::from_le_bytes(car.header.width.try_into().unwrap()) * 2; //We need an image twice the length and height each, so we do this calculation to get it
+    let height = u16::from_le_bytes(car.header.height.try_into().unwrap()) * 2; //
     header.width = width.to_le_bytes().to_vec();
     header.height = height.to_le_bytes().to_vec();
 
-    let row_width = width as usize / 2;
+    let row_width = width as usize / 2; //Used to determine the stopping point
     let row_height = height as usize / 2;
     let mut combined_pixels = Vec::with_capacity(width as usize * height as usize);
 
